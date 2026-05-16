@@ -28,7 +28,10 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 settings = get_settings()
 
 # Redis for token blacklist
-redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+redis_kwargs = {"decode_responses": True}
+if settings.REDIS_URL.startswith("rediss://"):
+    redis_kwargs["ssl_cert_reqs"] = "none"
+redis_client = redis.from_url(settings.REDIS_URL, **redis_kwargs)
 
 
 @router.post("/register", response_model=UserResponse, status_code=201)

@@ -12,12 +12,21 @@ from app.config import get_settings
 settings = get_settings()
 logger = logging.getLogger(__name__)
 
-redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+redis_url = settings.REDIS_URL
+if redis_url.startswith("rediss://") and "ssl_cert_reqs=" not in redis_url:
+    delimiter = "&" if "?" in redis_url else "?"
+    redis_url += f"{delimiter}ssl_cert_reqs=CERT_NONE"
+
+redis_kwargs = {"decode_responses": True}
+if redis_url.startswith("rediss://"):
+    redis_kwargs["ssl_cert_reqs"] = "none"
+
+redis_client = redis.from_url(settings.REDIS_URL, **redis_kwargs)
 
 celery = Celery(
     "atomquest",
-    broker=settings.REDIS_URL,
-    backend=settings.REDIS_URL,
+    broker=redis_url,
+    backend=redis_url,
 )
 
 celery.conf.beat_schedule = {
