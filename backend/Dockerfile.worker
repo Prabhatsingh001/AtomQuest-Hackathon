@@ -19,4 +19,4 @@ RUN chown -R celery:celery /app
 
 USER celery
 
-CMD ["celery", "-A", "app.tasks.scheduler", "worker", "--loglevel=info"]
+CMD ["celery", "-A", "app.tasks.scheduler", "worker", "--loglevel=info", "--concurrency=1", "--pool=solo"]
