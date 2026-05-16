@@ -25,7 +25,17 @@ QUARTER_MAP = {
 
 
 def normalize_quarter(quarter: str) -> str:
-    """Return a normalized quarter value or reject invalid input."""
+    """Validate and normalize a milestone quarter identifier.
+
+    Args:
+        quarter: Raw quarter string input.
+
+    Returns:
+        str: Normalized lowercase quarter string.
+
+    Raises:
+        HTTPException: If the quarter identifier is not recognized.
+    """
     normalized = quarter.lower()
     if normalized not in QUARTER_MAP:
         raise HTTPException(status_code=400, detail="Invalid quarter")
@@ -33,7 +43,16 @@ def normalize_quarter(quarter: str) -> str:
 
 
 def check_quarter_window(db: Session, cycle_id: UUID, quarter: str):
-    """Verify that the check-in window for the given quarter is open and not closed."""
+    """Verify that the check-in time window for a specific milestone is open.
+
+    Args:
+        db: Active database session.
+        cycle_id: Target performance cycle UUID.
+        quarter: Target milestone identifier.
+
+    Raises:
+        HTTPException: If the cycle is inactive, window has not opened, or window has closed.
+    """
     quarter = normalize_quarter(quarter)
     cycle = db.query(Cycle).filter(Cycle.id == cycle_id).first()
     if not cycle:
@@ -54,7 +73,6 @@ def check_quarter_window(db: Session, cycle_id: UUID, quarter: str):
             detail=f"{quarter.upper()} check-in window opens on {open_date.isoformat()}",
         )
 
-    # Check window closure when subsequent quarter opens
     if quarter == "q1" and today >= cycle.q2_open:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -81,7 +99,23 @@ def update_achievement(
     completion_date: Optional[date] = None,
     achievement_status: Optional[str] = None,
 ) -> GoalAchievement:
-    """Update or create a goal achievement for a quarter."""
+    """Record or update an employee's milestone achievement actuals.
+
+    Args:
+        db: Active database session.
+        goal_id: Target goal UUID.
+        quarter: Target milestone period.
+        user: The authenticated employee submitting the check-in.
+        actual_value: Recorded numeric actual figure.
+        completion_date: Completion date if applicable.
+        achievement_status: Qualitative status string.
+
+    Returns:
+        GoalAchievement: The updated achievement record with recalculated score.
+
+    Raises:
+        HTTPException: If the goal or sheet is not found, unauthorized, or window is closed.
+    """
     quarter = normalize_quarter(quarter)
     goal = db.query(Goal).filter(Goal.id == goal_id).first()
     if not goal:
@@ -91,7 +125,6 @@ def update_achievement(
     if not sheet:
         raise HTTPException(status_code=404, detail="Goal sheet not found")
 
-    # Verify ownership
     if sheet.employee_id != user.id:
         raise HTTPException(status_code=403, detail="Not your goal")
 
@@ -101,10 +134,8 @@ def update_achievement(
             detail="Check-ins are only allowed after goals are approved",
         )
 
-    # Check quarter window
     check_quarter_window(db, sheet.cycle_id, quarter)
 
-    # Get or create achievement
     achievement = (
         db.query(GoalAchievement)
         .filter(
@@ -133,7 +164,6 @@ def update_achievement(
     achievement.updated_by = user.id
     achievement.updated_at = datetime.utcnow()
 
-    # Compute score
     score = compute_score(
         uom_type=goal.uom_type,
         target=goal.target_value,
@@ -151,7 +181,17 @@ def update_achievement(
 def get_employee_achievements(
     db: Session, cycle_id: UUID, quarter: str, employee_id: UUID
 ) -> List[dict]:
-    """Get all achievements for an employee's goals in a quarter."""
+    """Retrieve all goal achievements for a specific employee in a given quarter.
+
+    Args:
+        db: Active database session.
+        cycle_id: Target performance cycle UUID.
+        quarter: Milestone review period.
+        employee_id: Target employee UUID.
+
+    Returns:
+        List[dict]: A list of dictionaries containing goal, achievement, and sheet records.
+    """
     quarter = normalize_quarter(quarter)
     sheets = (
         db.query(GoalSheet)
@@ -187,7 +227,17 @@ def get_employee_achievements(
 
 
 def get_team_achievements(db: Session, cycle_id: UUID, quarter: str, viewer: User) -> List[dict]:
-    """Get all achievements for a manager's team in a quarter."""
+    """Retrieve goal check-in progress for all team members managed by the viewer.
+
+    Args:
+        db: Active database session.
+        cycle_id: Target performance cycle UUID.
+        quarter: Milestone review period.
+        viewer: The supervising manager or administrator entity.
+
+    Returns:
+        List[dict]: A structured list of team member progress reports.
+    """
     quarter = normalize_quarter(quarter)
     employees_query = db.query(User)
     if viewer.role != "admin":
@@ -235,13 +285,26 @@ def get_team_achievements(db: Session, cycle_id: UUID, quarter: str, viewer: Use
 def add_checkin_comment(
     db: Session, goal_sheet_id: UUID, quarter: str, manager: User, comment: str
 ) -> CheckinComment:
-    """Add a check-in comment for an employee's sheet."""
+    """Record qualitative feedback comment from a manager regarding a check-in.
+
+    Args:
+        db: Active database session.
+        goal_sheet_id: Associated goal sheet UUID.
+        quarter: Target milestone period.
+        manager: Supervising manager entity authoring the comment.
+        comment: Feedback text content.
+
+    Returns:
+        CheckinComment: The recorded comment entity.
+
+    Raises:
+        HTTPException: If the sheet is not found or unauthorized.
+    """
     quarter = normalize_quarter(quarter)
     sheet = db.query(GoalSheet).filter(GoalSheet.id == goal_sheet_id).first()
     if not sheet:
         raise HTTPException(status_code=404, detail="Goal sheet not found")
 
-    # Verify manager relationship
     employee = db.query(User).filter(User.id == sheet.employee_id).first()
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")

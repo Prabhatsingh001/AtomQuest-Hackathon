@@ -11,7 +11,15 @@ settings = get_settings()
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Create a JWT access token."""
+    """Create and cryptographically sign a JWT access token.
+
+    Args:
+        data: Payload dictionary to encode.
+        expires_delta: Optional custom duration before expiration.
+
+    Returns:
+        str: Encoded JWT token string.
+    """
     to_encode = data.copy()
     expire = datetime.utcnow() + (
         expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -21,7 +29,15 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 
 def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Create a JWT refresh token."""
+    """Create and cryptographically sign a JWT refresh token.
+
+    Args:
+        data: Payload dictionary to encode.
+        expires_delta: Optional custom duration before expiration.
+
+    Returns:
+        str: Encoded JWT token string.
+    """
     to_encode = data.copy()
     expire = datetime.utcnow() + (
         expires_delta or timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
@@ -31,7 +47,14 @@ def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) 
 
 
 def decode_token(token: str) -> Optional[dict]:
-    """Decode and validate a JWT token."""
+    """Cryptographically verify and decode a JWT token.
+
+    Args:
+        token: Raw JWT token string.
+
+    Returns:
+        Optional[dict]: Decoded payload dictionary if valid, None otherwise.
+    """
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         return payload

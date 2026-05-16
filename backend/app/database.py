@@ -17,12 +17,16 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 class Base(DeclarativeBase):
-    """Base class for all SQLAlchemy models."""
+    """Declarative base class for all SQLAlchemy ORM models."""
     pass
 
 
 def get_db():
-    """Dependency that provides a database session."""
+    """Dependency generator that provides a database session.
+
+    Yields:
+        Session: An active SQLAlchemy database session.
+    """
     db = SessionLocal()
     try:
         yield db

@@ -14,7 +14,15 @@ from app.services.audit_service import log_audit
 
 
 def get_approval_queue(db: Session, manager: User) -> List[GoalSheet]:
-    """Get all submitted goal sheets from direct reports."""
+    """Retrieve all submitted goal sheets waiting for manager review.
+
+    Args:
+        db: Active database session.
+        manager: The supervising manager or administrator entity.
+
+    Returns:
+        List[GoalSheet]: A list of goal sheets currently in 'submitted' status.
+    """
     query = (
         db.query(GoalSheet)
         .join(User, GoalSheet.employee_id == User.id)
@@ -28,7 +36,16 @@ def get_approval_queue(db: Session, manager: User) -> List[GoalSheet]:
 def get_team_sheets(
     db: Session, manager: User, statuses: list = None # type: ignore
 ) -> List[GoalSheet]:
-    """Get all goal sheets from direct reports, optionally filtered by status."""
+    """Retrieve goal sheets for all direct reports, optionally filtered by status.
+
+    Args:
+        db: Active database session.
+        manager: The supervising manager or administrator entity.
+        statuses: Optional list of status strings to filter matching sheets.
+
+    Returns:
+        List[GoalSheet]: A list of matching team goal sheets.
+    """
     query = db.query(GoalSheet).join(User, GoalSheet.employee_id == User.id)
     if manager.role != "admin": # type: ignore
         query = query.filter(User.manager_id == manager.id)
@@ -38,12 +55,23 @@ def get_team_sheets(
 
 
 def approve_sheet(db: Session, sheet_id: UUID, manager: User) -> GoalSheet:
-    """Approve a goal sheet."""
+    """Approve an employee's submitted goal sheet and lock it.
+
+    Args:
+        db: Active database session.
+        sheet_id: Target goal sheet UUID.
+        manager: The manager or administrator executing the approval.
+
+    Returns:
+        GoalSheet: The successfully approved and locked goal sheet.
+
+    Raises:
+        HTTPException: If the sheet is not found, unauthorized, or not submitted.
+    """
     sheet = db.query(GoalSheet).filter(GoalSheet.id == sheet_id).first()
     if not sheet:
         raise HTTPException(status_code=404, detail="Goal sheet not found")
 
-    # Verify manager relationship
     employee = db.query(User).filter(User.id == sheet.employee_id).first()
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
@@ -80,7 +108,20 @@ def approve_sheet(db: Session, sheet_id: UUID, manager: User) -> GoalSheet:
 
 
 def return_sheet(db: Session, sheet_id: UUID, manager: User, comment: str) -> GoalSheet:
-    """Return a goal sheet for rework."""
+    """Return a submitted goal sheet to an employee for revisions.
+
+    Args:
+        db: Active database session.
+        sheet_id: Target goal sheet UUID.
+        manager: The manager or administrator returning the sheet.
+        comment: Rationale or feedback describing required revisions.
+
+    Returns:
+        GoalSheet: The goal sheet updated to 'returned' status.
+
+    Raises:
+        HTTPException: If the sheet is not found, unauthorized, or not submitted.
+    """
     sheet = db.query(GoalSheet).filter(GoalSheet.id == sheet_id).first()
     if not sheet:
         raise HTTPException(status_code=404, detail="Goal sheet not found")
@@ -112,12 +153,11 @@ def return_sheet(db: Session, sheet_id: UUID, manager: User, comment: str) -> Go
         {"status": "returned", "comment": comment},
     )
 
-    # Add return comment using CheckinComment (reuse as general comment)
     from app.models.checkin import CheckinComment
 
     return_comment = CheckinComment(
         goal_sheet_id=sheet.id,
-        quarter="q1",  # Return comments are independent of quarter
+        quarter="q1",
         manager_id=manager.id,
         comment=f"[RETURNED] {comment}",
     )
@@ -131,7 +171,20 @@ def return_sheet(db: Session, sheet_id: UUID, manager: User, comment: str) -> Go
 def unlock_sheet(
     db: Session, sheet_id: UUID, admin: User, reason: str = None
 ) -> GoalSheet:
-    """Admin unlock a locked goal sheet."""
+    """Administrator override to unlock an approved or locked goal sheet.
+
+    Args:
+        db: Active database session.
+        sheet_id: Target goal sheet UUID.
+        admin: The administrator executing the unlock operation.
+        reason: Optional text justification for the override.
+
+    Returns:
+        GoalSheet: The unlocked goal sheet reverted to 'returned' status.
+
+    Raises:
+        HTTPException: If the sheet is not found.
+    """
     sheet = db.query(GoalSheet).filter(GoalSheet.id == sheet_id).first()
     if not sheet:
         raise HTTPException(status_code=404, detail="Goal sheet not found")
@@ -159,7 +212,21 @@ def unlock_sheet(
 def inline_edit_goal(
     db: Session, sheet_id: UUID, goal_id: UUID, data: dict, manager: User
 ) -> Goal:
-    """Manager inline edit of a goal during review."""
+    """Execute manager inline edits of goal targets or weightages during review.
+
+    Args:
+        db: Active database session.
+        sheet_id: Target goal sheet UUID.
+        goal_id: Target goal UUID to modify.
+        data: Dictionary containing fields to update.
+        manager: The manager or administrator executing the edit.
+
+    Returns:
+        Goal: The updated goal entity.
+
+    Raises:
+        HTTPException: If the sheet or goal is not found, or validation fails.
+    """
     sheet = db.query(GoalSheet).filter(GoalSheet.id == sheet_id).first()
     if not sheet:
         raise HTTPException(status_code=404, detail="Goal sheet not found")

@@ -10,6 +10,20 @@ from app.database import Base
 
 
 class Cycle(Base):
+    """SQLAlchemy model representing an organizational goal-setting and appraisal cycle.
+
+    Attributes:
+        id: Primary key UUID.
+        name: Name of the performance cycle (e.g., 'FY2026').
+        goal_setting_open: Start date when goal creation becomes permitted.
+        q1_open: Opening date for Q1 milestone check-ins.
+        q2_open: Opening date for Q2 milestone check-ins.
+        q3_open: Opening date for Q3 milestone check-ins.
+        q4_open: Opening date for Q4 milestone check-ins.
+        is_active: Flag indicating if this is the currently enforced cycle.
+        created_by: UUID of the administrator who configured the cycle.
+        created_at: UTC creation timestamp.
+    """
     __tablename__ = "cycles"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

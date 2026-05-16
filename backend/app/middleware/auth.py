@@ -17,7 +17,18 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
-    """Decode JWT token and return the current user."""
+    """Decode JWT token and verify the current authenticated user.
+
+    Args:
+        credentials: The HTTP authorization header credentials.
+        db: Active database session dependency.
+
+    Returns:
+        User: The authenticated user database entity.
+
+    Raises:
+        HTTPException: If token is invalid, expired, or missing.
+    """
     token = credentials.credentials
     payload = decode_token(token)
     if payload is None:
@@ -60,7 +71,17 @@ async def get_current_user(
 async def get_current_active_user(
     current_user: User = Depends(get_current_user),
 ) -> User:
-    """Ensure the current user is active."""
+    """Ensure the currently authenticated user account is active.
+
+    Args:
+        current_user: The authenticated user entity.
+
+    Returns:
+        User: The verified active user entity.
+
+    Raises:
+        HTTPException: If the user account is deactivated.
+    """
     if not current_user.is_active:  # type: ignore
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

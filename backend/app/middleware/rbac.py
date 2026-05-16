@@ -6,10 +6,13 @@ from app.middleware.auth import get_current_active_user
 
 
 def require_roles(*roles: str):
-    """
-    FastAPI dependency factory for role-based access control.
-    
-    Usage: Depends(require_roles('admin', 'manager'))
+    """FastAPI dependency factory for enforcing role-based access control.
+
+    Args:
+        *roles: Allowed user role names.
+
+    Returns:
+        Callable: An async dependency function that checks the user's role.
     """
     async def role_checker(
         current_user: User = Depends(get_current_active_user),

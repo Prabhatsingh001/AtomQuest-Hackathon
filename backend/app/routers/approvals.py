@@ -40,7 +40,15 @@ def get_queue(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("manager", "admin")),
 ):
-    """Get submitted goal sheets from direct reports."""
+    """Retrieve all submitted goal sheets awaiting review from direct reports.
+
+    Args:
+        db: Active database session.
+        current_user: Authenticated supervising manager or administrator.
+
+    Returns:
+        list[GoalSheetResponse]: List of serialized submitted goal sheets.
+    """
     sheets = get_approval_queue(db, current_user)
     results = []
     for sheet in sheets:
@@ -58,7 +66,19 @@ def get_approval_sheet(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("manager", "admin")),
 ):
-    """Get full sheet detail for approval review."""
+    """Retrieve comprehensive details of a specific goal sheet for approval review.
+
+    Args:
+        sheet_id: Target goal sheet UUID.
+        db: Active database session.
+        current_user: Authenticated supervising manager or administrator.
+
+    Returns:
+        GoalSheetResponse: Serialized goal sheet with employee metadata.
+
+    Raises:
+        HTTPException: If the sheet is not found or unauthorized.
+    """
     sheet = db.query(GoalSheet).filter(GoalSheet.id == sheet_id).first()
     if not sheet:
         raise HTTPException(status_code=404, detail="Goal sheet not found")
@@ -81,7 +101,18 @@ def inline_edit(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("manager", "admin")),
 ):
-    """Inline edit target/weightage during approval review."""
+    """Perform inline modifications to a goal's target value or weightage during manager review.
+
+    Args:
+        sheet_id: Target goal sheet UUID.
+        goal_id: Target goal UUID.
+        data: Inline edit payload parameters.
+        db: Active database session.
+        current_user: Authenticated supervising manager or administrator.
+
+    Returns:
+        GoalResponse: Serialized updated goal.
+    """
     edit_data = data.model_dump(exclude_unset=True)
     goal = inline_edit_goal(db, sheet_id, goal_id, edit_data, current_user)
     return GoalResponse.model_validate(goal)
@@ -94,7 +125,17 @@ def approve(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("manager", "admin")),
 ):
-    """Approve a goal sheet."""
+    """Officially approve an employee's submitted goal sheet and trigger notification.
+
+    Args:
+        sheet_id: Target goal sheet UUID.
+        background_tasks: FastAPI background tasks queue.
+        db: Active database session.
+        current_user: Authenticated supervising manager or administrator.
+
+    Returns:
+        GoalSheetResponse: Serialized approved and locked goal sheet.
+    """
     sheet = approve_sheet(db, sheet_id, current_user)
     
     emp = db.query(User).filter(User.id == sheet.employee_id).first()
@@ -115,7 +156,18 @@ def return_for_rework(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("manager", "admin")),
 ):
-    """Return a sheet for rework with a comment."""
+    """Return a submitted goal sheet to an employee for revisions alongside a feedback comment.
+
+    Args:
+        sheet_id: Target goal sheet UUID.
+        data: Return request schema containing feedback comment.
+        background_tasks: FastAPI background tasks queue.
+        db: Active database session.
+        current_user: Authenticated supervising manager or administrator.
+
+    Returns:
+        GoalSheetResponse: Serialized returned goal sheet.
+    """
     sheet = return_sheet(db, sheet_id, current_user, data.comment)
     
     emp = db.query(User).filter(User.id == sheet.employee_id).first()
@@ -135,6 +187,16 @@ def unlock(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
-    """Admin unlock a locked goal sheet."""
+    """Override protection lock to unlock an approved goal sheet for administrative corrections.
+
+    Args:
+        sheet_id: Target goal sheet UUID.
+        data: Optional justification schema.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        GoalSheetResponse: Serialized unlocked goal sheet.
+    """
     sheet = unlock_sheet(db, sheet_id, current_user, data.reason) # type: ignore
     return GoalSheetResponse.model_validate(sheet)

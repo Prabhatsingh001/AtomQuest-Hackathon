@@ -36,8 +36,18 @@ redis_client = redis.from_url(settings.REDIS_URL, **redis_kwargs)
 
 @router.post("/register", response_model=UserResponse, status_code=201)
 def register(data: RegisterRequest, db: Session = Depends(get_db)):
-    """Register a new employee account."""
-    # Check duplicate email
+    """Register a new employee account.
+
+    Args:
+        data: Registration schema containing email, name, password, and optional department.
+        db: Active database session.
+
+    Returns:
+        UserResponse: The newly created inactive employee account.
+
+    Raises:
+        HTTPException: If the email already exists or department is invalid.
+    """
     existing = db.query(User).filter(User.email == data.email).first()
     if existing:
         raise HTTPException(
@@ -54,14 +64,13 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
                 status_code=400, detail="Invalid or inactive department"
             )
 
-    # Create user
     user = User(
         email=data.email,
         full_name=data.full_name,
         hashed_password=pwd_context.hash(data.password),
         role="employee",
         department_id=data.department_id,
-        is_active=False,  # Require admin activation
+        is_active=False,
     )
     db.add(user)
     db.commit()
@@ -72,7 +81,18 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(data: LoginRequest, db: Session = Depends(get_db)):
-    """Authenticate user and return JWT tokens."""
+    """Authenticate user credentials and generate active JWT session tokens.
+
+    Args:
+        data: Login schema containing email and plaintext password.
+        db: Active database session.
+
+    Returns:
+        TokenResponse: Access and refresh tokens alongside user metadata.
+
+    Raises:
+        HTTPException: If credentials fail verification or the account is inactive.
+    """
     user = db.query(User).filter(User.email == data.email).first()
     if not user or not pwd_context.verify(data.password, user.hashed_password):  # type: ignore
         raise HTTPException(
@@ -88,7 +108,6 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
 
-    # Store refresh token hash in Redis to support multiple sessions
     token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
     redis_client.setex(
         f"refresh:{str(user.id)}:{token_hash}",
@@ -105,7 +124,18 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
 
 @router.post("/refresh", response_model=AccessTokenResponse)
 def refresh(data: RefreshRequest, db: Session = Depends(get_db)):
-    """Refresh the access token using a valid refresh token."""
+    """Issue a new access token using an unrevoked refresh token.
+
+    Args:
+        data: Request payload containing the active refresh token.
+        db: Active database session.
+
+    Returns:
+        AccessTokenResponse: A fresh access token and rotated refresh token pair.
+
+    Raises:
+        HTTPException: If the refresh token is invalid, expired, or blacklisted.
+    """
     payload = decode_token(data.refresh_token)
     if not payload or payload.get("type") != "refresh":
         raise HTTPException(status_code=401, detail="Invalid refresh token")
@@ -119,7 +149,6 @@ def refresh(data: RefreshRequest, db: Session = Depends(get_db)):
     except ValueError:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
-    # Check if token is blacklisted
     token_hash = hashlib.sha256(data.refresh_token.encode()).hexdigest()
     if redis_client.get(f"blacklist:{token_hash}"):
         raise HTTPException(status_code=401, detail="Token has been revoked")
@@ -159,7 +188,15 @@ def logout(
     data: Optional[RefreshRequest] = None,
     current_user: User = Depends(get_current_active_user),
 ):
-    """Logout — blacklist refresh token(s)."""
+    """Invalidate current session tokens and revoke active refresh tokens.
+
+    Args:
+        data: Optional payload containing specific refresh token to revoke.
+        current_user: Currently authenticated user entity.
+
+    Returns:
+        dict: Success confirmation message.
+    """
     if data and data.refresh_token:
         token_hash = hashlib.sha256(data.refresh_token.encode()).hexdigest()
         if redis_client.get(f"refresh:{str(current_user.id)}:{token_hash}"):
@@ -170,7 +207,6 @@ def logout(
                 "1",
             )
     else:
-        # Revoke all active refresh tokens for this user
         for key in redis_client.scan_iter(f"refresh:{str(current_user.id)}:*"):
             token_hash = key.split(":")[-1]
             redis_client.delete(key)
@@ -185,5 +221,12 @@ def logout(
 
 @router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_active_user)):
-    """Get current user info."""
+    """Retrieve metadata and profile information for the authenticated user.
+
+    Args:
+        current_user: The authenticated user entity.
+
+    Returns:
+        UserResponse: Serialized profile data.
+    """
     return UserResponse.model_validate(current_user)

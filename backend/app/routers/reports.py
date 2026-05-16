@@ -29,7 +29,18 @@ def achievement_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
-    """Get planned vs actual for all employees."""
+    """Generate comprehensive achievement report comparing planned targets against actuals.
+
+    Args:
+        cycle_id: Optional performance cycle UUID.
+        quarter: Optional milestone review period filter.
+        department: Optional department name filter.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        list[dict]: List of structured employee achievement records.
+    """
     if not cycle_id:
         cycle = db.query(Cycle).filter(Cycle.is_active).first()
         if not cycle:
@@ -44,7 +55,16 @@ def completion_dashboard(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
-    """Which employees/managers have done check-ins."""
+    """Retrieve organizational check-in completion statistics grouped by department.
+
+    Args:
+        cycle_id: Optional performance cycle UUID.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        list[dict]: Department aggregated completion percentages.
+    """
     if not cycle_id:
         cycle = db.query(Cycle).filter(Cycle.is_active).first()
         if not cycle:
@@ -60,7 +80,17 @@ def export_csv_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
-    """Stream CSV export of achievement report."""
+    """Export organizational achievement metrics as a downloadable CSV file stream.
+
+    Args:
+        cycle_id: Optional performance cycle UUID.
+        department: Optional department filter.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        StreamingResponse: HTTP stream returning CSV file payload.
+    """
     if not cycle_id:
         cycle = db.query(Cycle).filter(Cycle.is_active).first()
         if not cycle:
@@ -84,7 +114,17 @@ def export_excel_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
-    """Return Excel file of achievement report."""
+    """Export organizational achievement metrics as a downloadable OpenXML Excel workbook.
+
+    Args:
+        cycle_id: Optional performance cycle UUID.
+        department: Optional department filter.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        StreamingResponse: HTTP stream returning formatted Excel spreadsheet.
+    """
     if not cycle_id:
         cycle = db.query(Cycle).filter(Cycle.is_active).first()
         if not cycle:
@@ -109,7 +149,16 @@ def qoq_trends(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
-    """Quarter-on-quarter score trends."""
+    """Calculate quarter-on-quarter organizational average score progression trends.
+
+    Args:
+        cycle_id: Optional performance cycle UUID.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        list[dict]: Quarterly average scores and count metrics.
+    """
     from app.models.goal import GoalAchievement
 
     if not cycle_id:
@@ -144,7 +193,16 @@ def goal_distribution(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
-    """Goal count by thrust area, UoM type, status."""
+    """Aggregate organizational goal distribution breakdowns by thrust area, UoM type, and sheet status.
+
+    Args:
+        cycle_id: Optional performance cycle UUID.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        dict: Aggregated distribution metrics across dimensions.
+    """
     from app.models.goal import Goal, GoalSheet
     from sqlalchemy import func
 

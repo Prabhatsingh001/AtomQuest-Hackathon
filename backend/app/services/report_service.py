@@ -23,7 +23,20 @@ def get_achievement_report(
     quarter: Optional[str] = None,
     department: Optional[str] = None,
 ) -> List[dict]:
-    """Generate achievement report data."""
+    """Generate comprehensive achievement report metrics across all employee goal sheets.
+
+    Args:
+        db: Active database session.
+        cycle_id: Target performance cycle UUID.
+        quarter: Optional specific milestone review period to filter.
+        department: Optional department name to filter results.
+
+    Returns:
+        List[dict]: A list of row dictionaries mapping employee goal actuals and scores.
+
+    Raises:
+        ValueError: If an invalid quarter identifier is provided.
+    """
     if quarter and quarter not in {"q1", "q2", "q3", "q4"}:
         raise ValueError("quarter must be one of: q1, q2, q3, q4")
 
@@ -103,7 +116,15 @@ def get_achievement_report(
 
 
 def get_completion_dashboard(db: Session, cycle_id: UUID) -> List[dict]:
-    """Generate completion dashboard data grouped by department."""
+    """Calculate organizational milestone check-in completion percentages by department.
+
+    Args:
+        db: Active database session.
+        cycle_id: Target performance cycle UUID.
+
+    Returns:
+        List[dict]: Department aggregated metrics mapping employee completion progress.
+    """
     employees = (
         db.query(User.id, Department.name)
         .outerjoin(Department, User.department_id == Department.id)
@@ -174,7 +195,14 @@ def get_completion_dashboard(db: Session, cycle_id: UUID) -> List[dict]:
 
 
 def export_csv(rows: List[dict]) -> str:
-    """Export report rows to CSV string."""
+    """Format an achievement report dictionary dataset into a raw CSV text string.
+
+    Args:
+        rows: Dataset list of dictionaries.
+
+    Returns:
+        str: Comma-separated values formatted text payload.
+    """
     output = io.StringIO()
     if not rows:
         return ""
@@ -185,7 +213,14 @@ def export_csv(rows: List[dict]) -> str:
 
 
 def export_excel(rows: List[dict]) -> BytesIO:
-    """Export report rows to Excel bytes."""
+    """Compile an achievement report dictionary dataset into an OpenXML Excel workbook stream.
+
+    Args:
+        rows: Dataset list of dictionaries.
+
+    Returns:
+        BytesIO: In-memory byte stream containing the formatted spreadsheet.
+    """
     wb = Workbook()
     ws = wb.active
     ws.title = "Achievement Report"

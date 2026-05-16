@@ -10,6 +10,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def clean_and_seed():
+    """Wipe database schema and seed initial test accounts, departments, and goal sheets for testing."""
     print("Cleaning database...")
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)

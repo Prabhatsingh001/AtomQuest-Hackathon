@@ -19,6 +19,19 @@ from app.database import Base
 
 
 class AuditLog(Base):
+    """SQLAlchemy model representing immutable system audit log records.
+
+    Attributes:
+        id: Primary key UUID.
+        entity_type: Name of the audited table or entity domain.
+        entity_id: UUID of the modified database record.
+        action: Specific event or action identifier string.
+        changed_by: UUID of the user who executed the operation.
+        old_value: JSONB snapshot of state prior to modification.
+        new_value: JSONB snapshot of state resulting from modification.
+        reason: Optional text justification provided for the change.
+        timestamp: UTC timestamp indicating precisely when the event occurred.
+    """
     __tablename__ = "audit_logs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -33,6 +46,18 @@ class AuditLog(Base):
 
 
 class EscalationRule(Base):
+    """SQLAlchemy model representing configurable automated escalation rules.
+
+    Attributes:
+        id: Primary key UUID.
+        name: Human-readable descriptive name of the rule.
+        trigger_event: Categorized event type that initiates evaluation.
+        days_threshold: Duration in days after which unaddressed items escalate.
+        notify_employee: Flag enabling direct email notification to the target employee.
+        notify_manager: Flag enabling direct email notification to the target's manager.
+        notify_hr: Flag enabling direct email notification to the HR department.
+        is_active: Status flag controlling whether this rule actively evaluates.
+    """
     __tablename__ = "escalation_rules"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

@@ -11,6 +11,23 @@ from app.database import Base
 
 
 class User(Base):
+    """SQLAlchemy model representing an authenticatable user account.
+
+    Attributes:
+        id: Primary key UUID.
+        email: Unique user email address used for login.
+        full_name: Complete display name of the user.
+        hashed_password: Bcrypt hashed password credential.
+        role: Assigned system authorization role ('employee', 'manager', 'admin').
+        manager_id: UUID of the user's direct supervising manager.
+        department_id: UUID of the user's assigned organizational department.
+        is_active: Status flag indicating if the account is currently active.
+        created_at: UTC creation timestamp.
+        updated_at: UTC modification timestamp.
+        manager: Self-referential relationship back to supervising User entity.
+        department: Relationship back to assigned Department entity.
+        goal_sheets: List of associated GoalSheet entities.
+    """
     __tablename__ = "users"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -33,7 +50,6 @@ class User(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
-    # Relationships
     manager = relationship("User", remote_side="User.id", backref="direct_reports")
     department = relationship("Department", back_populates="users")
     goal_sheets = relationship(
@@ -41,5 +57,10 @@ class User(Base):
     )
 
     @property
-    def department_name(self):
+    def department_name(self) -> str | None:
+        """Convenience property resolving the department name if assigned.
+
+        Returns:
+            str | None: Department name string if present, None otherwise.
+        """
         return self.department.name if self.department else None

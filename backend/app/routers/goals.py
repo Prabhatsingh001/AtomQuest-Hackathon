@@ -26,7 +26,16 @@ def get_my_sheet(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Get or create the current user's goal sheet for a cycle."""
+    """Retrieve or initialize the active performance goal sheet for the authenticated employee.
+
+    Args:
+        cycle_id: Target performance appraisal cycle UUID.
+        db: Active database session.
+        current_user: Authenticated employee entity.
+
+    Returns:
+        GoalSheetResponse: Serialized goal sheet data alongside profile metadata.
+    """
     sheet = get_or_create_sheet(db, current_user.id, cycle_id) # type: ignore
     resp = GoalSheetResponse.model_validate(sheet)
     resp.employee_name = current_user.full_name # type: ignore
@@ -40,7 +49,16 @@ def create_new_goal(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Create a new goal on the user's goal sheet."""
+    """Create a new performance goal within the employee's active draft goal sheet.
+
+    Args:
+        data: Verified goal creation schema.
+        db: Active database session.
+        current_user: Authenticated employee entity.
+
+    Returns:
+        GoalResponse: Serialized newly created goal entity.
+    """
     goal = create_goal(db, data, current_user)
     return GoalResponse.model_validate(goal)
 
@@ -52,7 +70,17 @@ def update_existing_goal(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Update an existing goal."""
+    """Modify attributes of an existing personal goal while its sheet is unlocked.
+
+    Args:
+        goal_id: Target goal UUID.
+        data: Updated goal parameter schema.
+        db: Active database session.
+        current_user: Authenticated employee entity.
+
+    Returns:
+        GoalResponse: Serialized updated goal entity.
+    """
     goal = update_goal(db, goal_id, data, current_user)
     return GoalResponse.model_validate(goal)
 
@@ -63,7 +91,16 @@ def delete_existing_goal(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Delete a goal (only if sheet is draft/returned)."""
+    """Remove a goal from an employee's sheet if the sheet is in draft or returned status.
+
+    Args:
+        goal_id: Target goal UUID.
+        db: Active database session.
+        current_user: Authenticated employee entity.
+
+    Returns:
+        dict: Success confirmation message.
+    """
     delete_goal(db, goal_id, current_user)
     return {"message": "Goal deleted"}
 
@@ -75,7 +112,17 @@ def submit_goal_sheet(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Submit a goal sheet for manager approval."""
+    """Finalize and submit a goal sheet for managerial review and approval.
+
+    Args:
+        sheet_id: Target goal sheet UUID.
+        background_tasks: FastAPI background tasks queue.
+        db: Active database session.
+        current_user: Authenticated employee entity.
+
+    Returns:
+        GoalSheetResponse: Serialized submitted goal sheet.
+    """
     sheet = submit_sheet(db, sheet_id, current_user)
 
     if current_user.manager_id: # type: ignore
@@ -100,7 +147,19 @@ def get_sheet(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Get a goal sheet by ID."""
+    """Retrieve full structural details of a specific goal sheet by its UUID.
+
+    Args:
+        sheet_id: Target goal sheet UUID.
+        db: Active database session.
+        current_user: Authenticated user entity.
+
+    Returns:
+        GoalSheetResponse: Serialized goal sheet alongside employee metadata.
+
+    Raises:
+        HTTPException: If the sheet is not found or user lacks access authorization.
+    """
     sheet = db.query(GoalSheet).filter(GoalSheet.id == sheet_id).first()
     if not sheet:
         from fastapi import HTTPException

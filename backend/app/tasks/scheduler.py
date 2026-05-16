@@ -19,7 +19,7 @@ if redis_url.startswith("rediss://") and "ssl_cert_reqs=" not in redis_url:
 
 redis_kwargs = {"decode_responses": True}
 if redis_url.startswith("rediss://"):
-    redis_kwargs["ssl_cert_reqs"] = "required"
+    redis_kwargs["ssl_cert_reqs"] = "required" # type: ignore
 
 redis_client = redis.from_url(settings.REDIS_URL, **redis_kwargs)
 
@@ -55,7 +55,16 @@ celery.conf.beat_schedule = {
 celery.conf.timezone = "UTC"
 
 
-def _current_quarter(cycle, today: date):
+def _current_quarter(cycle, today: date) -> Optional[str]:
+    """Determine the currently operating performance review quarter based on milestone dates.
+
+    Args:
+        cycle: Active performance appraisal cycle entity.
+        today: Current date instance for evaluation.
+
+    Returns:
+        Optional[str]: Active quarter identifier ('q1', 'q2', 'q3', 'q4') or None if unstarted.
+    """
     if today >= cycle.q4_open:
         return "q4"
     if today >= cycle.q3_open:
@@ -68,6 +77,15 @@ def _current_quarter(cycle, today: date):
 
 
 def _achievement_done(goal, achievement) -> bool:
+    """Evaluate whether an employee has completed their required actuals check-in for a milestone.
+
+    Args:
+        goal: Target Goal entity.
+        achievement: Matching GoalAchievement record.
+
+    Returns:
+        bool: True if the actuals check-in is complete, False otherwise.
+    """
     if not achievement:
         return False
     if achievement.status == "completed":
@@ -79,7 +97,7 @@ def _achievement_done(goal, achievement) -> bool:
 
 @celery.task
 def enforce_cycle_windows():
-    """Check if any quarter window should open; log when opened."""
+    """Daily periodic Celery task to verify and log transitions across quarterly appraisal windows."""
     try:
         from app.database import SessionLocal
         from app.models.cycle import Cycle
@@ -96,7 +114,7 @@ def enforce_cycle_windows():
 
 @celery.task
 def send_goal_submission_reminder():
-    """Check employees who haven't submitted goals after goal_setting_open."""
+    """Daily periodic Celery task to dispatch email reminders to employees with unsubmitted goals."""
     try:
         from app.database import SessionLocal
         from app.models.cycle import Cycle
@@ -148,7 +166,7 @@ def send_goal_submission_reminder():
 
 @celery.task
 def send_approval_reminder():
-    """Check managers who haven't approved submitted goals."""
+    """Daily periodic Celery task to alert supervising managers of pending unapproved goal sheets."""
     try:
         from app.database import SessionLocal
         from app.models.goal import GoalSheet
@@ -186,7 +204,7 @@ def send_approval_reminder():
 
 @celery.task
 def send_checkin_reminder():
-    """Check employees who haven't done check-ins after quarter opens."""
+    """Daily periodic Celery task to notify employees of pending or overdue quarterly check-ins."""
     try:
         from app.database import SessionLocal
         from app.models.cycle import Cycle
@@ -252,7 +270,7 @@ def send_checkin_reminder():
 
 @celery.task
 def run_escalations():
-    """Load active escalation_rules, evaluate conditions, fire notifications."""
+    """Daily periodic Celery task to evaluate active escalation rules and trigger overdue alerts across organizational hierarchy."""
     try:
         from datetime import date
         from app.database import SessionLocal

@@ -56,15 +56,27 @@ app.include_router(users.router, prefix="/api/v1")
 app.include_router(departments.router, prefix="/api/v1")
 
 
-# Health endpoint
 @app.get("/api/v1/health")
 def health():
+    """Verify operational readiness of the API web service.
+
+    Returns:
+        dict: Operational status confirmation and current deployment version.
+    """
     return {"status": "ok", "version": "1.0.0"}
 
 
-# Global exception handlers
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
+    """Format expected HTTP exceptions into uniform standardized JSON responses.
+
+    Args:
+        request: Incoming HTTP request instance.
+        exc: Raised HTTPException entity.
+
+    Returns:
+        JSONResponse: Standardized error envelope payload.
+    """
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -78,6 +90,15 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(ValidationError)
 async def validation_exception_handler(request: Request, exc: ValidationError):
+    """Intercept Pydantic validation errors and format them into readable JSON responses.
+
+    Args:
+        request: Incoming HTTP request instance.
+        exc: Raised Pydantic ValidationError entity.
+
+    Returns:
+        JSONResponse: Unprocessable Entity error envelope payload.
+    """
     return JSONResponse(
         status_code=422,
         content={
@@ -91,6 +112,15 @@ async def validation_exception_handler(request: Request, exc: ValidationError):
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
+    """Catch unhandled runtime exceptions to log stack traces and avoid leaking internals.
+
+    Args:
+        request: Incoming HTTP request instance.
+        exc: Unhandled Exception entity.
+
+    Returns:
+        JSONResponse: Secure Internal Server Error envelope.
+    """
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
@@ -107,7 +137,11 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 @app.on_event("startup")
 async def startup():
-    """Verify DB connection on startup."""
+    """Execute asynchronous startup routines to verify relational database connectivity.
+
+    Raises:
+        Exception: Logged if initial connection handshake fails.
+    """
     try:
         from sqlalchemy import text
 

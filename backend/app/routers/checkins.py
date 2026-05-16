@@ -30,7 +30,17 @@ def get_my_checkins(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Get the current user's achievements for a quarter."""
+    """Retrieve check-in actuals and achievement progress for the authenticated employee.
+
+    Args:
+        cycle_id: Target performance cycle UUID.
+        quarter: Target milestone period.
+        db: Active database session.
+        current_user: Authenticated employee entity.
+
+    Returns:
+        list[dict]: List of serialized goals and milestone achievement records.
+    """
     quarter = normalize_quarter(quarter)
     results = get_employee_achievements(db, cycle_id, quarter, current_user.id) # type: ignore
     output = []
@@ -72,7 +82,18 @@ def update_goal_achievement(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Update actual value / status for a goal in a quarter."""
+    """Record or update actual values and qualitative status for a goal milestone.
+
+    Args:
+        goal_id: Target goal UUID.
+        quarter: Target milestone period.
+        data: Updated achievement actuals and completion parameters.
+        db: Active database session.
+        current_user: Authenticated employee entity.
+
+    Returns:
+        GoalAchievementResponse: Serialized achievement record with recalculated score.
+    """
     ach = update_achievement(
         db,
         goal_id,
@@ -92,7 +113,17 @@ def get_team_checkins(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("manager", "admin")),
 ):
-    """Get all team members' achievements for a quarter."""
+    """Retrieve check-in actuals and achievement progress for all direct reports.
+
+    Args:
+        cycle_id: Target performance cycle UUID.
+        quarter: Target milestone period.
+        db: Active database session.
+        current_user: Authenticated supervising manager or administrator.
+
+    Returns:
+        list[dict]: Structured team progress breakdown.
+    """
     quarter = normalize_quarter(quarter)
     results = get_team_achievements(db, cycle_id, quarter, current_user)
     output = []
@@ -138,7 +169,16 @@ def post_checkin_comment(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("manager", "admin")),
 ):
-    """Add a check-in comment for an employee's sheet."""
+    """Record qualitative feedback comment from a manager on an employee's milestone check-in.
+
+    Args:
+        data: Check-in comment creation schema.
+        db: Active database session.
+        current_user: Authenticated supervising manager or administrator.
+
+    Returns:
+        CheckinCommentResponse: Serialized feedback comment.
+    """
     comment = add_checkin_comment(
         db, data.goal_sheet_id, data.quarter, current_user, data.comment
     )
@@ -154,7 +194,20 @@ def get_comments(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Fetch check-in comments for a sheet and quarter."""
+    """Fetch all recorded manager feedback comments for a specific goal sheet and quarter.
+
+    Args:
+        sheet_id: Target goal sheet UUID.
+        quarter: Target milestone period.
+        db: Active database session.
+        current_user: Authenticated user making the request.
+
+    Returns:
+        list[CheckinCommentResponse]: Serialized list of matching feedback comments.
+
+    Raises:
+        HTTPException: If the sheet is not found or unauthorized.
+    """
     quarter = normalize_quarter(quarter)
     sheet = db.query(GoalSheet).filter(GoalSheet.id == sheet_id).first()
     if not sheet:

@@ -51,13 +51,20 @@ def _to_jsonable(value):
     return value
 
 
-# --- Cycles ---
-
 @router.get("/cycles")
 def list_cycles(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
+    """Retrieve all configured organizational performance cycles.
+
+    Args:
+        db: Active database session.
+        current_user: Authenticated user making the request.
+
+    Returns:
+        list[CycleResponse]: List of serialized cycle records.
+    """
     cycles = db.query(Cycle).order_by(Cycle.created_at.desc()).all()
     return [CycleResponse.model_validate(c) for c in cycles]
 
@@ -68,6 +75,16 @@ def create_cycle(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
+    """Create a new organizational performance appraisal cycle.
+
+    Args:
+        data: Verified schema containing cycle dates and metadata.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        CycleResponse: Serialized newly created cycle.
+    """
     cycle = Cycle(**data.model_dump(), created_by=current_user.id)
     db.add(cycle)
     db.flush()
@@ -91,6 +108,20 @@ def update_cycle(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
+    """Update milestone dates or attributes of an existing performance cycle.
+
+    Args:
+        cycle_id: Target cycle UUID.
+        data: Payload containing fields to update.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        CycleResponse: Updated cycle record.
+
+    Raises:
+        HTTPException: If the target cycle is not found.
+    """
     cycle = db.query(Cycle).filter(Cycle.id == cycle_id).first()
     if not cycle:
         raise HTTPException(status_code=404, detail="Cycle not found")
@@ -127,7 +158,19 @@ def activate_cycle(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
-    # Deactivate all
+    """Enforce a specific performance cycle as the actively operating company cycle.
+
+    Args:
+        cycle_id: Target cycle UUID to activate.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        CycleResponse: Serialized activated cycle.
+
+    Raises:
+        HTTPException: If the target cycle is not found.
+    """
     previous_active = db.query(Cycle).filter(Cycle.is_active).first()
     db.query(Cycle).update({"is_active": False})
     cycle = db.query(Cycle).filter(Cycle.id == cycle_id).first()
@@ -150,14 +193,20 @@ def activate_cycle(
     return CycleResponse.model_validate(cycle)
 
 
-# --- Users ---
-
-
 @router.get("/users")
 def list_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
+    """Retrieve all system user accounts.
+
+    Args:
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        list[UserResponse]: Serialized list of user records.
+    """
     users = db.query(User).order_by(User.created_at.desc()).all()
     return [UserResponse.model_validate(u) for u in users]
 
@@ -168,6 +217,19 @@ def create_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
+    """Create a new user account with assigned role and department.
+
+    Args:
+        data: Verified user creation schema.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        UserResponse: Serialized newly created user profile.
+
+    Raises:
+        HTTPException: If email is already registered or department is invalid.
+    """
     existing = db.query(User).filter(User.email == data.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -219,6 +281,20 @@ def update_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
+    """Modify role, department, or activation status of an existing user.
+
+    Args:
+        user_id: Target user UUID.
+        data: Fields to update.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        UserResponse: Updated user profile.
+
+    Raises:
+        HTTPException: If user or department is not found.
+    """
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -260,6 +336,20 @@ def get_user_sheet(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
+    """Retrieve the performance goal sheet for a specific user and cycle.
+
+    Args:
+        user_id: Target employee UUID.
+        cycle_id: Target performance cycle UUID.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        GoalSheetResponse: Serialized goal sheet data.
+
+    Raises:
+        HTTPException: If the goal sheet is not found.
+    """
     sheet = (
         db.query(GoalSheet)
         .filter(GoalSheet.employee_id == user_id, GoalSheet.cycle_id == cycle_id)
@@ -274,14 +364,20 @@ def get_user_sheet(
     return resp
 
 
-# --- Departments ---
-
-
 @router.get("/departments", response_model=list[DepartmentResponse])
 def list_departments(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
+    """List all organizational departments with aggregate employee counts.
+
+    Args:
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        list[DepartmentResponse]: Serialized departments list.
+    """
     rows = (
         db.query(Department, func.count(User.id))
         .outerjoin(User, User.department_id == Department.id)
@@ -303,6 +399,19 @@ def create_department(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
+    """Create a new organizational department.
+
+    Args:
+        data: Verified department creation schema.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        DepartmentResponse: Serialized newly created department.
+
+    Raises:
+        HTTPException: If department name already exists.
+    """
     existing = db.query(Department).filter(Department.name == data.name).first()
     if existing:
         raise HTTPException(status_code=400, detail="Department already exists")
@@ -332,6 +441,19 @@ def deactivate_department(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
+    """Deactivate an organizational department if no employees are currently assigned.
+
+    Args:
+        department_id: Target department UUID.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        DepartmentResponse: Serialized deactivated department.
+
+    Raises:
+        HTTPException: If department is not found or has active assigned employees.
+    """
     department = db.query(Department).filter(Department.id == department_id).first()
     if not department:
         raise HTTPException(status_code=404, detail="Department not found")
@@ -359,15 +481,22 @@ def deactivate_department(
     return resp
 
 
-# --- Completion Dashboard ---
-
-
 @router.get("/completion-dashboard")
 def completion_dashboard(
     cycle_id: UUID = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
+    """Retrieve organizational goal and check-in completion statistics grouped by department.
+
+    Args:
+        cycle_id: Optional performance cycle UUID.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        list[dict]: Department completion dashboard metrics.
+    """
     if not cycle_id:
         cycle = db.query(Cycle).filter(Cycle.is_active).first()
         if not cycle:
@@ -376,9 +505,6 @@ def completion_dashboard(
     from app.services.report_service import get_completion_dashboard
 
     return get_completion_dashboard(db, cycle_id)
-
-
-# --- Audit Logs ---
 
 
 @router.get("/audit-logs")
@@ -390,6 +516,19 @@ def get_audit_logs(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
+    """Retrieve immutable system audit log records with pagination and filtering.
+
+    Args:
+        entity_type: Optional entity domain filter.
+        user_id: Optional user UUID filter.
+        page: Requested page index.
+        page_size: Records per page limit.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        dict: Paginated audit log response container.
+    """
     query = db.query(AuditLog).order_by(AuditLog.timestamp.desc())
     if entity_type:
         query = query.filter(AuditLog.entity_type == entity_type)
@@ -409,21 +548,29 @@ def get_audit_logs(
     return {"items": results, "total": total, "page": page, "page_size": page_size}
 
 
-# --- Shared Goals ---
-
-
 @router.post("/shared-goals/push")
 def push_shared_goals(
     data: SharedGoalPush,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
-    """Push a goal to multiple employees as shared goals."""
+    """Distribute a shared company goal to multiple employees across their active goal sheets.
+
+    Args:
+        data: Push payload containing goal template attributes and employee UUIDs.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        dict: Confirmation message and list of successfully assigned employee UUIDs.
+
+    Raises:
+        HTTPException: If no active cycle is found.
+    """
     cycle = db.query(Cycle).filter(Cycle.is_active).first()
     if not cycle:
         raise HTTPException(status_code=400, detail="No active cycle")
 
-    # Create parent goal on admin's sheet
     admin_sheet = (
         db.query(GoalSheet)
         .filter(
@@ -458,7 +605,6 @@ def push_shared_goals(
     db.commit()
     db.refresh(parent_goal)
 
-    # Create linked copies for each employee
     created = []
     num_employees = len(data.employee_ids)
     individual_weightage = Decimal(data.goal_template.weightage) / Decimal(num_employees) if num_employees > 0 else Decimal(0)
@@ -496,7 +642,6 @@ def push_shared_goals(
         )
         db.add(linked_goal)
 
-        # Recalculate weightage
         from app.services.goal_service import _calculate_total_weightage
         emp_sheet.total_weightage = _calculate_total_weightage(db, emp_sheet.id)
 
@@ -529,6 +674,15 @@ def get_shared_goals(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
+    """Retrieve all shared company goals authored by the administrator in the active cycle.
+
+    Args:
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        list[GoalResponse]: Serialized list of shared goals.
+    """
     cycle = db.query(Cycle).filter(Cycle.is_active).first()
     if not cycle:
         return []
@@ -555,6 +709,20 @@ def update_shared_goal(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
+    """Synchronously update attributes of a parent shared goal and all its distributed child copies.
+
+    Args:
+        goal_id: Target parent shared goal UUID.
+        data: Fields to modify.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        GoalResponse: Updated parent shared goal entity.
+
+    Raises:
+        HTTPException: If parent shared goal is not found.
+    """
     parent = db.query(Goal).filter(Goal.id == goal_id, Goal.is_shared == True).first()
     if not parent:
         raise HTTPException(status_code=404, detail="Shared goal not found")
@@ -576,14 +744,20 @@ def update_shared_goal(
     return parent
 
 
-# --- Escalation Rules ---
-
-
 @router.get("/escalation-rules")
 def list_escalation_rules(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
+    """Retrieve all configured automated escalation rules.
+
+    Args:
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        list[EscalationRuleResponse]: List of escalation rules.
+    """
     rules = db.query(EscalationRule).all()
     return [EscalationRuleResponse.model_validate(r) for r in rules]
 
@@ -594,6 +768,16 @@ def create_escalation_rule(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
+    """Create a new automated escalation policy rule.
+
+    Args:
+        data: Verified escalation rule creation schema.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        EscalationRuleResponse: Serialized newly created rule.
+    """
     rule = EscalationRule(**data.model_dump())
     db.add(rule)
     db.flush()
@@ -617,6 +801,20 @@ def update_escalation_rule(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_roles("admin")),
 ):
+    """Modify parameters or status of an existing escalation policy rule.
+
+    Args:
+        rule_id: Target escalation rule UUID.
+        data: Fields to update.
+        db: Active database session.
+        current_user: Authenticated administrator entity.
+
+    Returns:
+        EscalationRuleResponse: Updated escalation rule record.
+
+    Raises:
+        HTTPException: If target escalation rule is not found.
+    """
     rule = db.query(EscalationRule).filter(EscalationRule.id == rule_id).first()
     if not rule:
         raise HTTPException(status_code=404, detail="Escalation rule not found")

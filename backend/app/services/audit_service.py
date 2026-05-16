@@ -17,7 +17,18 @@ def log_audit(
     new_value: Optional[dict] = None,
     reason: Optional[str] = None,
 ):
-    """Create an append-only audit log entry."""
+    """Create an append-only audit log entry recording a data mutation event.
+
+    Args:
+        db: Active database session.
+        entity_type: Domain classification of the modified entity.
+        entity_id: Unique UUID of the record being audited.
+        action: Identifier describing the specific operation performed.
+        changed_by: UUID of the user responsible for the action.
+        old_value: Optional dictionary snapshot prior to modification.
+        new_value: Optional dictionary snapshot after modification.
+        reason: Optional text explanation provided for the change.
+    """
     entry = AuditLog(
         entity_type=entity_type,
         entity_id=entity_id,
