@@ -1,0 +1,1 @@
+"""AtomQuest Goal Portal Backend."""
