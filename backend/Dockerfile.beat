@@ -1,0 +1,22 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Create non-root user to avoid SecurityWarning
+RUN groupadd -r celery && useradd -r -g celery celery
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc libpq-dev && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+RUN chown -R celery:celery /app
+
+USER celery
+
+CMD ["celery", "-A", "app.tasks.scheduler", "beat", "--loglevel=info"]

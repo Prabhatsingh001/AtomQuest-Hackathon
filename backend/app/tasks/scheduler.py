@@ -15,11 +15,11 @@ logger = logging.getLogger(__name__)
 redis_url = settings.REDIS_URL
 if redis_url.startswith("rediss://") and "ssl_cert_reqs=" not in redis_url:
     delimiter = "&" if "?" in redis_url else "?"
-    redis_url += f"{delimiter}ssl_cert_reqs=CERT_NONE"
+    redis_url += f"{delimiter}ssl_cert_reqs=CERT_REQUIRED"
 
 redis_kwargs = {"decode_responses": True}
 if redis_url.startswith("rediss://"):
-    redis_kwargs["ssl_cert_reqs"] = "none"
+    redis_kwargs["ssl_cert_reqs"] = "required"
 
 redis_client = redis.from_url(settings.REDIS_URL, **redis_kwargs)
 
