@@ -19,8 +19,7 @@ from app.routers import (
     users,
     departments,
 )
-from sqlalchemy.exc import OperationalError
-from sqlalchemy.pool import PoolError
+from sqlalchemy.exc import OperationalError, TimeoutError
 
 settings = get_settings()
 
@@ -113,7 +112,7 @@ async def validation_exception_handler(request: Request, exc: ValidationError):
 
 
 @app.exception_handler(OperationalError)
-@app.exception_handler(PoolError)
+@app.exception_handler(TimeoutError)
 async def database_exception_handler(request: Request, exc: Exception):
     """Intercept database connection disconnects or failovers to return HTTP 503 Service Unavailable."""
     logger.error(f"Database connection error: {exc}")
