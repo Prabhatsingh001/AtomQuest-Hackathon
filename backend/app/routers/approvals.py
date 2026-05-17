@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.models.goal import GoalSheet
+from app.models.outbox import OutboxEvent
 from app.schemas.goal import GoalSheetResponse, GoalResponse
 # from app.middleware.auth import get_current_active_user
 from app.middleware.rbac import require_roles
@@ -51,8 +52,11 @@ def get_queue(
     """
     sheets = get_approval_queue(db, current_user)
     results = []
+    emp_ids = {s.employee_id for s in sheets if s.employee_id}
+    emp_map = {u.id: u for u in db.query(User).filter(User.id.in_(emp_ids)).all()} if emp_ids else {}
+
     for sheet in sheets:
-        emp = db.query(User).filter(User.id == sheet.employee_id).first()
+        emp = emp_map.get(sheet.employee_id)
         resp = GoalSheetResponse.model_validate(sheet)
         resp.employee_name = emp.full_name if emp else None # type: ignore
         resp.employee_email = emp.email if emp else None # type: ignore
@@ -140,6 +144,17 @@ def approve(
     
     emp = db.query(User).filter(User.id == sheet.employee_id).first()
     if emp:
+        outbox = OutboxEvent(
+            event_type="notify_goal_approved",
+            payload={
+                "sheet_id": str(sheet.id),
+                "employee_email": emp.email,  # type: ignore
+                "manager_name": current_user.full_name,  # type: ignore
+            },
+        )
+        db.add(outbox)
+        db.commit()
+
         from app.services.notification_service import notify_goal_approved
         background_tasks.add_task(
             notify_goal_approved, str(sheet.id), emp.email, current_user.full_name # type: ignore
@@ -172,6 +187,18 @@ def return_for_rework(
     
     emp = db.query(User).filter(User.id == sheet.employee_id).first()
     if emp:
+        outbox = OutboxEvent(
+            event_type="notify_goal_returned",
+            payload={
+                "sheet_id": str(sheet.id),
+                "employee_email": emp.email,  # type: ignore
+                "manager_name": current_user.full_name,  # type: ignore
+                "comment": data.comment,
+            },
+        )
+        db.add(outbox)
+        db.commit()
+
         from app.services.notification_service import notify_goal_returned
         background_tasks.add_task(
             notify_goal_returned, str(sheet.id), emp.email, current_user.full_name, data.comment # type: ignore

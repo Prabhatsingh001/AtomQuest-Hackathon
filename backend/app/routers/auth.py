@@ -1,5 +1,6 @@
 """Auth router — login, register, logout, refresh, me."""
 
+import logging
 import redis
 import hashlib
 from typing import Optional
@@ -26,6 +27,7 @@ from app.middleware.auth import get_current_active_user
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 settings = get_settings()
+logger = logging.getLogger(__name__)
 
 # Redis for token blacklist
 redis_kwargs = {"decode_responses": True}
@@ -109,11 +111,14 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
     refresh_token = create_refresh_token({"sub": str(user.id)})
 
     token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
-    redis_client.setex(
-        f"refresh:{str(user.id)}:{token_hash}",
-        settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        "1",
-    )
+    try:
+        redis_client.setex(
+            f"refresh:{str(user.id)}:{token_hash}",
+            settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+            "1",
+        )
+    except redis.RedisError as e:
+        logger.warning(f"Redis cache unavailable during login: {e}")
 
     return TokenResponse(
         access_token=access_token,
@@ -150,12 +155,15 @@ def refresh(data: RefreshRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
     token_hash = hashlib.sha256(data.refresh_token.encode()).hexdigest()
-    if redis_client.get(f"blacklist:{token_hash}"):
-        raise HTTPException(status_code=401, detail="Token has been revoked")
+    try:
+        if redis_client.get(f"blacklist:{token_hash}"):
+            raise HTTPException(status_code=401, detail="Token has been revoked")
 
-    stored = redis_client.get(f"refresh:{str(user_uuid)}:{token_hash}")
-    if not stored:
-        raise HTTPException(status_code=401, detail="Invalid refresh token")
+        stored = redis_client.get(f"refresh:{str(user_uuid)}:{token_hash}")
+        if not stored:
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
+    except redis.RedisError as e:
+        logger.warning(f"Redis cache unavailable during refresh check: {e}")
 
     user = db.query(User).filter(User.id == user_uuid).first()
     if not user or not user.is_active:  # type: ignore
@@ -165,17 +173,20 @@ def refresh(data: RefreshRequest, db: Session = Depends(get_db)):
     refresh_token = create_refresh_token({"sub": str(user_uuid)})
 
     new_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
-    redis_client.delete(f"refresh:{str(user_uuid)}:{token_hash}")
-    redis_client.setex(
-        f"refresh:{str(user_uuid)}:{new_hash}",
-        settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        "1",
-    )
-    redis_client.setex(
-        f"blacklist:{token_hash}",
-        settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        "1",
-    )
+    try:
+        redis_client.delete(f"refresh:{str(user_uuid)}:{token_hash}")
+        redis_client.setex(
+            f"refresh:{str(user_uuid)}:{new_hash}",
+            settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+            "1",
+        )
+        redis_client.setex(
+            f"blacklist:{token_hash}",
+            settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+            "1",
+        )
+    except redis.RedisError as e:
+        logger.warning(f"Redis cache unavailable during refresh token rotation: {e}")
 
     return AccessTokenResponse(
         access_token=access_token,
@@ -197,24 +208,27 @@ def logout(
     Returns:
         dict: Success confirmation message.
     """
-    if data and data.refresh_token:
-        token_hash = hashlib.sha256(data.refresh_token.encode()).hexdigest()
-        if redis_client.get(f"refresh:{str(current_user.id)}:{token_hash}"):
-            redis_client.delete(f"refresh:{str(current_user.id)}:{token_hash}")
-            redis_client.setex(
-                f"blacklist:{token_hash}",
-                settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-                "1",
-            )
-    else:
-        for key in redis_client.scan_iter(f"refresh:{str(current_user.id)}:*"):
-            token_hash = key.split(":")[-1]
-            redis_client.delete(key)
-            redis_client.setex(
-                f"blacklist:{token_hash}",
-                settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-                "1",
-            )
+    try:
+        if data and data.refresh_token:
+            token_hash = hashlib.sha256(data.refresh_token.encode()).hexdigest()
+            if redis_client.get(f"refresh:{str(current_user.id)}:{token_hash}"):
+                redis_client.delete(f"refresh:{str(current_user.id)}:{token_hash}")
+                redis_client.setex(
+                    f"blacklist:{token_hash}",
+                    settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+                    "1",
+                )
+        else:
+            for key in redis_client.scan_iter(f"refresh:{str(current_user.id)}:*"):
+                token_hash = key.split(":")[-1]
+                redis_client.delete(key)
+                redis_client.setex(
+                    f"blacklist:{token_hash}",
+                    settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+                    "1",
+                )
+    except redis.RedisError as e:
+        logger.warning(f"Redis cache unavailable during logout: {e}")
 
     return {"message": "Logged out successfully"}
 
@@ -230,3 +244,4 @@ def me(current_user: User = Depends(get_current_active_user)):
         UserResponse: Serialized profile data.
     """
     return UserResponse.model_validate(current_user)
+

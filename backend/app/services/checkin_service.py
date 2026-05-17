@@ -6,7 +6,7 @@ from typing import Optional, List
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.goal import Goal, GoalAchievement, GoalSheet
 from app.models.cycle import Cycle
@@ -195,6 +195,7 @@ def get_employee_achievements(
     quarter = normalize_quarter(quarter)
     sheets = (
         db.query(GoalSheet)
+        .options(joinedload(GoalSheet.goals))
         .filter(
             GoalSheet.employee_id == employee_id,
             GoalSheet.cycle_id == cycle_id,
@@ -203,22 +204,26 @@ def get_employee_achievements(
         .all()
     )
 
+    goal_ids = [goal.id for sheet in sheets for goal in sheet.goals]
+    ach_map = {}
+    if goal_ids:
+        achievements = (
+            db.query(GoalAchievement)
+            .filter(
+                GoalAchievement.goal_id.in_(goal_ids),
+                GoalAchievement.quarter == quarter,
+            )
+            .all()
+        )
+        ach_map = {ach.goal_id: ach for ach in achievements}
+
     results = []
     for sheet in sheets:
         for goal in sheet.goals:
-            achievement = (
-                db.query(GoalAchievement)
-                .filter(
-                    GoalAchievement.goal_id == goal.id,
-                    GoalAchievement.quarter == quarter,
-                )
-                .first()
-            )
-
             results.append(
                 {
                     "goal": goal,
-                    "achievement": achievement,
+                    "achievement": ach_map.get(goal.id),
                     "sheet": sheet,
                 }
             )
@@ -243,40 +248,57 @@ def get_team_achievements(db: Session, cycle_id: UUID, quarter: str, viewer: Use
     if viewer.role != "admin":
         employees_query = employees_query.filter(User.manager_id == viewer.id)
     employees = employees_query.order_by(User.full_name.asc()).all()
+
+    if not employees:
+        return []
+
+    emp_ids = [emp.id for emp in employees]
+    sheets = (
+        db.query(GoalSheet)
+        .options(joinedload(GoalSheet.goals))
+        .filter(
+            GoalSheet.employee_id.in_(emp_ids),
+            GoalSheet.cycle_id == cycle_id,
+            GoalSheet.status == "approved",
+        )
+        .all()
+    )
+
+    sheets_by_emp = {}
+    goal_ids = []
+    for sheet in sheets:
+        sheets_by_emp.setdefault(sheet.employee_id, []).append(sheet)
+        for goal in sheet.goals:
+            goal_ids.append(goal.id)
+
+    ach_map = {}
+    if goal_ids:
+        achievements = (
+            db.query(GoalAchievement)
+            .filter(
+                GoalAchievement.goal_id.in_(goal_ids),
+                GoalAchievement.quarter == quarter,
+            )
+            .all()
+        )
+        ach_map = {ach.goal_id: ach for ach in achievements}
+
     results = []
     for emp in employees:
         emp_data = {
             "employee": emp,
             "goals": [],
         }
-        sheets = (
-            db.query(GoalSheet)
-            .filter(
-                GoalSheet.employee_id == emp.id,
-                GoalSheet.cycle_id == cycle_id,
-                GoalSheet.status == "approved",
-            )
-            .all()
-        )
-
-        for sheet in sheets:
+        emp_sheets = sheets_by_emp.get(emp.id, [])
+        for sheet in emp_sheets:
             for goal in sheet.goals:
-                achievement = (
-                    db.query(GoalAchievement)
-                    .filter(
-                        GoalAchievement.goal_id == goal.id,
-                        GoalAchievement.quarter == quarter,
-                    )
-                    .first()
-                )
                 emp_data["goals"].append(
                     {
                         "goal": goal,
-                        "achievement": achievement,
+                        "achievement": ach_map.get(goal.id),
                         "sheet_id": sheet.id,
                     }
                 )
-
         results.append(emp_data)
 
     return results

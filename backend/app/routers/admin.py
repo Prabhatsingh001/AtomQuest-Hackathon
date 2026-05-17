@@ -539,8 +539,11 @@ def get_audit_logs(
     logs = query.offset((page - 1) * page_size).limit(page_size).all()
 
     results = []
+    user_ids = {log.changed_by for log in logs if log.changed_by}
+    user_map = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}
+
     for log in logs:
-        user = db.query(User).filter(User.id == log.changed_by).first()
+        user = user_map.get(log.changed_by)
         resp = AuditLogResponse.model_validate(log)
         resp.changed_by_name = user.full_name if user else None #type: ignore
         results.append(resp)

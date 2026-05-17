@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { goalsApi } from '@/api/goals';
 import { adminApi } from '@/api/admin';
 import { GoalCard } from '@/components/goals/GoalCard';
@@ -11,30 +12,28 @@ import type { GoalSheet, Goal, Cycle } from '@/types';
 import toast from 'react-hot-toast';
 
 export default function MyGoals() {
-  const [sheet, setSheet] = useState<GoalSheet | null>(null);
-  const [cycle, setCycle] = useState<Cycle | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [deleteGoalId, setDeleteGoalId] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const cycles = await adminApi.getCycles().catch(() => []);
-      const active = cycles.find((c: Cycle) => c.is_active);
-      if (!active) { setLoading(false); return; }
-      setCycle(active);
-      setSheet(await goalsApi.getMySheet(active.id));
-    } catch {
-      toast.error('Failed to load goals');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { data: cyclesData = [], isLoading: loadingCycles } = useQuery({
+    queryKey: ['cycles'],
+    queryFn: () => adminApi.getCycles().catch(() => []),
+    staleTime: 1000 * 60 * 5,
+  });
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const activeCycle = cyclesData.find((c: Cycle) => c.is_active);
+
+  const { data: sheet, isLoading: loadingSheet } = useQuery({
+    queryKey: ['mySheet', activeCycle?.id],
+    queryFn: () => activeCycle ? goalsApi.getMySheet(activeCycle.id) : null,
+    enabled: !!activeCycle,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const loading = loadingCycles || loadingSheet;
 
   const handleCreate = async (data: GoalFormData) => {
     if (!sheet) return;
@@ -47,7 +46,7 @@ export default function MyGoals() {
       });
       toast.success('Goal created');
       setShowForm(false);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['mySheet'] });
     } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); }
   };
 
@@ -62,20 +61,28 @@ export default function MyGoals() {
       });
       toast.success('Goal updated');
       setEditingGoal(null);
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['mySheet'] });
     } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); }
   };
 
   const handleDelete = async () => {
     if (!deleteGoalId) return;
-    try { await goalsApi.deleteGoal(deleteGoalId); toast.success('Deleted'); setDeleteGoalId(null); fetchData(); }
-    catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); }
+    try {
+      await goalsApi.deleteGoal(deleteGoalId);
+      toast.success('Deleted');
+      setDeleteGoalId(null);
+      queryClient.invalidateQueries({ queryKey: ['mySheet'] });
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); }
   };
 
   const handleSubmit = async () => {
     if (!sheet) return;
-    try { await goalsApi.submitSheet(sheet.id); toast.success('Submitted'); setShowSubmitConfirm(false); fetchData(); }
-    catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); }
+    try {
+      await goalsApi.submitSheet(sheet.id);
+      toast.success('Submitted');
+      setShowSubmitConfirm(false);
+      queryClient.invalidateQueries({ queryKey: ['mySheet'] });
+    } catch (err: any) { toast.error(err.response?.data?.message || 'Failed'); }
   };
 
   const total = sheet?.goals.filter(g => !g.is_shared).reduce((s, g) => s + Number(g.weightage), 0) || 0;
@@ -94,7 +101,7 @@ export default function MyGoals() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold text-zinc-900">My Goals</h1>
-          {cycle && <p className="text-sm text-zinc-400 mt-0.5">{cycle.name}</p>}
+          {activeCycle && <p className="text-sm text-zinc-400 mt-0.5">{activeCycle.name}</p>}
         </div>
         {sheet && <StatusChip status={sheet.status} />}
       </div>

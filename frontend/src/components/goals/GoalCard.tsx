@@ -53,7 +53,7 @@ export function GoalCard({ goal, isLocked, onEdit, onDelete, inlineEditNode }: G
         )}
       </div>
 
-      <div className="flex items-center gap-4 mt-4 pt-3 border-t border-zinc-100 text-xs text-zinc-500">
+      <div className="flex flex-wrap items-center gap-y-2 gap-x-4 mt-4 pt-3 border-t border-zinc-100 text-xs text-zinc-500">
         <span>{UOM_LABELS[goal.uom_type] || goal.uom_type}</span>
         {goal.target_date && <span>Due: {new Date(goal.target_date).toLocaleDateString()}</span>}
         

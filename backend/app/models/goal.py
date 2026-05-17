@@ -16,6 +16,7 @@ from sqlalchemy import (
     Text,
     Numeric,
     UniqueConstraint,
+    Index,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -67,6 +68,7 @@ class GoalSheet(Base):
 
     __table_args__ = (
         UniqueConstraint("employee_id", "cycle_id", name="uq_employee_cycle"),
+        Index("idx_sheet_cycle_emp", "cycle_id", "employee_id", "status"),
     )
 
     employee = relationship(
@@ -175,7 +177,10 @@ class GoalAchievement(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
-    __table_args__ = (UniqueConstraint("goal_id", "quarter", name="uq_goal_quarter"),)
+    __table_args__ = (
+        UniqueConstraint("goal_id", "quarter", name="uq_goal_quarter"),
+        Index("idx_achieve_goal_quarter", "goal_id", "quarter"),
+    )
 
     goal = relationship("Goal", back_populates="achievements")
     cycle = relationship("Cycle")

@@ -258,6 +258,8 @@ def inline_edit_goal(
         "weightage": str(goal.weightage),
     }
 
+    all_goals = db.query(Goal).filter(Goal.goal_sheet_id == sheet_id).all()
+
     if "weightage" in data:
         new_weightage = Decimal(str(data["weightage"]))
         if new_weightage < 10 or new_weightage > 100:
@@ -266,15 +268,7 @@ def inline_edit_goal(
                 detail="Weightage must be between 10 and 100",
             )
 
-        other_goals = (
-            db.query(Goal)
-            .filter(
-                Goal.goal_sheet_id == sheet_id,
-                Goal.id != goal.id,
-            )
-            .all()
-        )
-        other_total = sum(g.weightage for g in other_goals)
+        other_total = sum(g.weightage for g in all_goals if g.id != goal.id)
         if other_total + new_weightage > 100:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -307,9 +301,9 @@ def inline_edit_goal(
     )
 
     # Recalculate total weightage
-    goals = db.query(Goal).filter(Goal.goal_sheet_id == sheet_id).all()
-    sheet.total_weightage = sum(g.weightage for g in goals)
+    sheet.total_weightage = sum(g.weightage for g in all_goals)
 
     db.commit()
     db.refresh(goal)
     return goal
+

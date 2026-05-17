@@ -6,6 +6,7 @@ from app.models.cycle import Cycle
 from app.models.goal import GoalSheet, Goal, GoalAchievement
 from app.models.checkin import CheckinComment
 from app.models.audit import AuditLog, EscalationRule
+from app.models.outbox import OutboxEvent
 
 __all__ = [
     "User",
@@ -17,4 +18,6 @@ __all__ = [
     "CheckinComment",
     "AuditLog",
     "EscalationRule",
+    "OutboxEvent",
 ]
+

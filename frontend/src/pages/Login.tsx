@@ -81,10 +81,10 @@ export default function Login() {
 
         <div className="mt-8 pt-6 border-t border-zinc-200">
           <p className="text-xs text-zinc-400 mb-3 font-medium">Quick access</p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {DEMOS.map((d) => (
               <button key={d.label} onClick={() => handleDemo(d)} disabled={loading}
-                className="flex-1 py-2.5 text-xs font-medium text-zinc-600 bg-white border border-zinc-200 rounded-lg hover:bg-zinc-50 hover:border-zinc-300 transition-colors disabled:opacity-50">
+                className="flex-1 min-w-[100px] py-2.5 px-2 text-xs font-medium text-zinc-600 bg-white border border-zinc-200 rounded-lg hover:bg-zinc-50 hover:border-zinc-300 transition-colors disabled:opacity-50 text-center">
                 {d.label}
               </button>
             ))}

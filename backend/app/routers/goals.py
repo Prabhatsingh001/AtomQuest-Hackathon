@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.models.goal import GoalSheet
+from app.models.outbox import OutboxEvent
 from app.schemas.goal import GoalCreate, GoalUpdate, GoalResponse, GoalSheetResponse
 from app.middleware.auth import get_current_active_user
 from app.services.goal_service import (
@@ -128,6 +129,18 @@ def submit_goal_sheet(
     if current_user.manager_id: # type: ignore
         manager = db.query(User).filter(User.id == current_user.manager_id).first()
         if manager:
+            outbox = OutboxEvent(
+                event_type="notify_goal_submitted",
+                payload={
+                    "sheet_id": str(sheet.id),
+                    "employee_email": current_user.email,  # type: ignore
+                    "employee_name": current_user.full_name,  # type: ignore
+                    "manager_email": manager.email,  # type: ignore
+                },
+            )
+            db.add(outbox)
+            db.commit()
+
             from app.services.notification_service import notify_goal_submitted
 
             background_tasks.add_task(

@@ -232,8 +232,11 @@ def get_comments(
     )
 
     results = []
+    mgr_ids = {c.manager_id for c in comments if c.manager_id}
+    mgr_map = {u.id: u for u in db.query(User).filter(User.id.in_(mgr_ids)).all()} if mgr_ids else {}
+
     for c in comments:
-        mgr = db.query(User).filter(User.id == c.manager_id).first()
+        mgr = mgr_map.get(c.manager_id)
         resp = CheckinCommentResponse.model_validate(c)
         resp.manager_name = mgr.full_name if mgr else None  # type: ignore
         results.append(resp)

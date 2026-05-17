@@ -31,3 +31,4 @@ docker.example
 docker-compose.example.yml
 celerybeat-schedule
 Dockerfile.dev
+.env.production

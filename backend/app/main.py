@@ -19,6 +19,8 @@ from app.routers import (
     users,
     departments,
 )
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.pool import PoolError
 
 settings = get_settings()
 
@@ -107,6 +109,23 @@ async def validation_exception_handler(request: Request, exc: ValidationError):
             "detail": exc.errors(),
             "code": "VALIDATION_ERROR",
         },
+    )
+
+
+@app.exception_handler(OperationalError)
+@app.exception_handler(PoolError)
+async def database_exception_handler(request: Request, exc: Exception):
+    """Intercept database connection disconnects or failovers to return HTTP 503 Service Unavailable."""
+    logger.error(f"Database connection error: {exc}")
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": True,
+            "message": "Service Temporarily Unavailable",
+            "detail": "The database is undergoing maintenance or automated failover. Please try again shortly.",
+            "code": "DATABASE_UNAVAILABLE",
+        },
+        headers={"Retry-After": "30"},
     )
 
 
