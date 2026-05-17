@@ -112,10 +112,10 @@ docker compose up --build
 
 | Role | Email | Password | Features |
 | :--- | :--- | :--- | :--- |
-| **Admin** | `admin@atomquest.com` | `Admin@123` | Cycle management, organization dashboard, shared goals, audit log |
-| **Manager** | `manager@atomquest.com` | `Manager@123` | Approval queue, inline editing, check-in reviews, team progress |
-| **Employee** | `alice@atomquest.com` | `Alice@123` | Goal setting, weightage allocation (100% check), quarterly actuals |
-| **Employee** | `bob@atomquest.com` | `Bob@123` | Personal goal sheet drafting & check-in submission |
+| **Admin** | `admin@atomquest.com` | `password` | Cycle management, organization dashboard, shared goals, audit log |
+| **Manager** | `manager@atomquest.com` | `password` | Approval queue, inline editing, check-in reviews, team progress |
+| **Employee** | `alice@atomquest.com` | `password` | Goal setting, weightage allocation (100% check), quarterly actuals |
+| **Employee** | `bob@atomquest.com` | `password` | Personal goal sheet drafting & check-in submission |
 
 ---
 
