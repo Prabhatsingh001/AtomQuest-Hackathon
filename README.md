@@ -7,6 +7,11 @@
 [![Redis](https://img.shields.io/badge/redis-%23DD0031.svg?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io/)
 [![Celery](https://img.shields.io/badge/celery-%2337814A.svg?style=for-the-badge&logo=celery&logoColor=white)](https://docs.celeryq.dev/)
 
+## Live Demo
+
+> [Link to Live Demo](https://atomquest-hackathon-07mk.onrender.com)
+
+
 **AtomQuest** is a production-grade, highly resilient Performance Management and Objective Key Result (OKR) portal designed for modern enterprises. Built with a lightning-fast React single-page application and a robust FastAPI Python backend, AtomQuest seamlessly unites organizational goal setting, quarterly achievement check-ins, multi-tiered managerial approval workflows, and automated HR escalations into a single, bulletproof platform.
 
 ---
